@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Drowsiness Detection</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: url('path/to/car-background.jpg') no-repeat center center fixed;
+      background-size: cover;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      text-align: center;
+      background-color: rgba(255, 255, 255, 0.8);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    #canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+    #label-container {
+      font-size: 18px;
+      margin-top: 10px;
+    }
+
+    button {
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div>Teachable Machine Pose Model</div>
+    <button type="button" onclick="init()">Start</button>
+    <canvas id="canvas"></canvas>
+    <div id="label-container"></div>
+  </div>
+
+  <script>
+    const URL = "https://teachablemachine.withgoogle.com/models/1SKLheTw_/";
+    let model, webcam, ctx, labelContainer, maxPredictions;
+
+    async function init() {
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
+
+    model = await tmPose.load(modelURL, metadataURL);
+    maxPredictions = model.getTotalClasses();
+
+    const size = 200;
+    const flip = true;
+    webcam = new tmPose.Webcam(size, size, flip);
+    await webcam.setup();
+    await webcam.play();
+    window.requestAnimationFrame(loop);
+
+    const canvas = document.getElementById("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    ctx = canvas.getContext("2d");
+    labelContainer = document.getElementById("label-container");
+    for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+    }
+}
+
+async function loop(timestamp) {
+    webcam.update();
+    await predict();
+    window.requestAnimationFrame(loop);
+}
+
+    async function predict() {
+      const { pose } = await model.estimatePose(webcam.canvas);
+
+      const isDrowsy = detectDrowsiness(pose);
+
+      if (isDrowsy) {
+        showDrowsinessAlert();
+      } else {
+        hideDrowsinessAlert();
+      }
+
+      drawPose(pose);
+    }
+
+    function detectDrowsiness(pose) {
+      // Adjusted logic for detecting drowsiness
+      const headAngleThreshold = 20;
+      const headAngle = calculateHeadAngle(pose);
+
+      const eyesOpenThreshold = 0.6; // Adjusted threshold for eye openness
+      const leftEyeOpenness = calculateEyeOpenness(pose.keypoints[1], pose.keypoints[2]);
+      const rightEyeOpenness = calculateEyeOpenness(pose.keypoints[3], pose.keypoints[4]);
+
+      // Check for drowsiness based on conditions
+      if (headAngle > headAngleThreshold && (leftEyeOpenness < eyesOpenThreshold || rightEyeOpenness < eyesOpenThreshold)) {
+        return true; // Detected drowsiness
+      }
+
+      return false; // No drowsiness detected
+    }
+// Other functions (continued)
+function calculateHeadAngle(pose) {
+    // Calculate head angle based on pose keypoints
+    const neckKeypoint = pose.keypoints[0];
+    const headKeypoint = pose.keypoints[1];
+
+    const dx = headKeypoint.position.x - neckKeypoint.position.x;
+    const dy = headKeypoint.position.y - neckKeypoint.position.y;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    return Math.abs(angle);
+}
+
+function calculateEyeOpenness(eyeKeypoint1, eyeKeypoint2) {
+    // Calculate eye openness based on keypoints
+    const eyeVerticalDistance = Math.abs(eyeKeypoint1.position.y - eyeKeypoint2.position.y);
+    const eyeSize = Math.hypot(eyeKeypoint1.position.x - eyeKeypoint2.position.x, eyeVerticalDistance);
+
+    return eyeVerticalDistance / eyeSize;
+}
+
+function drawPose(pose) {
+    if (webcam.canvas) {
+        ctx.drawImage(webcam.canvas, 0, 0);
+        const minPartConfidence = 0.5;
+        tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+        tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+    }
+}
+
+function playAlertSound() {
+    const alertSound = new Audio('/alarm-car-or-home-62554.mp3');
+    alertSound.play();
+}
+
+function stopAlertSound() {
+    if (alertSound && !alertSound.paused) {
+        alertSound.pause();
+        alertSound.currentTime = 0;
+    }
+}
+
+// Call the init() function to start the drowsiness detection
+init();
+
+    // Other functions (same as before)
+  </script>
+</body>
+</html>
